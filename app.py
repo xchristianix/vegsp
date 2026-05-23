@@ -51,7 +51,7 @@ st.markdown("""
 
     .status-aberto  { color:#2E7D32; font-weight:700; font-size:0.82rem; }
     .status-fechado { color:#c62828; font-weight:700; font-size:0.82rem; }
-    .distancia      { color:#555; font-size:0.82rem; font-weight:600; }
+    .distancia      { color:#888; font-size:0.8rem; font-weight:500; margin-left:6px; }
 
     .card-info { font-size:0.85rem; color:#555; margin:0.1rem 0; line-height:1.5; }
     .card-info a { color:#1565C0; }
@@ -208,7 +208,7 @@ if not tem_loc:
         );
     })();
     </script>
-    """, height=0)
+    """, height=1)
 
 if tem_loc:
     st.markdown('<span class="loc-pill">📍 Ordenando pelo mais próximo de você</span>',
@@ -329,7 +329,7 @@ else:
         else:                 sh = ""
 
         dv = row.get("_dist")
-        dh = f'<span class="distancia">&nbsp;· {fmt_dist(dv)}</span>' if dv and not pd.isna(dv) else ""
+        dh = f'<span class="distancia">· {fmt_dist(dv)}</span>' if (dv is not None and not pd.isna(dv)) else ""
 
         hora_txt = "—"
         if pd.notna(row.get("hora_abre")) and pd.notna(row.get("hora_fecha")):
@@ -348,8 +348,8 @@ else:
 
         st.markdown(f"""
         <div class="card-wrap card-{tipo}">
-          <span class="badge badge-{tipo}">{rotulo}</span>{sh}{dh}
-          <p class="nome-estab">{row['nome']}</p>
+          <span class="badge badge-{tipo}">{rotulo}</span>{sh}
+          <p class="nome-estab">{row['nome']}{dh}</p>
           <p class="card-info">🍽️ {row.get('tipo_estab','—')} &nbsp;|&nbsp; 🥘 {row.get('culinaria','—')}</p>
           <p class="card-info">📍 {row.get('bairro','—')}</p>
           <p class="card-info">🏠 {row.get('endereco','—')}</p>
