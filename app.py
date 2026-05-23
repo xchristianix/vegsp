@@ -184,12 +184,14 @@ st.markdown("""
 # ── Geolocalização AUTOMÁTICA ─────────────────────────────────────────
 # JS roda na carga da página, sem botão, sem filtro
 # Salva lat/lng nos query params e recarrega se ainda não tiver
-# Componente de geolocalização embutido no código
-# Cria a pasta do componente em tempo de execução — sem dependência de arquivos externos
-import tempfile
-_geo_dir = tempfile.mkdtemp()
-with open(os.path.join(_geo_dir, "index.html"), "w", encoding="utf-8") as _f:
-    _f.write("""<!DOCTYPE html>
+# Componente de geolocalização embutido — cacheado para não recriar a cada rerun
+@st.cache_resource
+def _criar_geo_componente():
+    """Cria o componente apenas UMA vez por sessão do servidor."""
+    import tempfile
+    geo_dir = tempfile.mkdtemp()
+    with open(os.path.join(geo_dir, "index.html"), "w", encoding="utf-8") as f:
+        f.write("""<!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -247,8 +249,9 @@ with open(os.path.join(_geo_dir, "index.html"), "w", encoding="utf-8") as _f:
 </script>
 </body>
 </html>""")
+    return components.declare_component("geo_location", path=geo_dir)
 
-_geo_comp = components.declare_component("geo_location", path=_geo_dir)
+_geo_comp = _criar_geo_componente()
 geo_data = _geo_comp(key="geoloc", default=None)
 
 user_lat = 0.0
