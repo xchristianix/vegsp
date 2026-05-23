@@ -3,37 +3,32 @@ import pandas as pd
 from datetime import datetime
 import re
 
-# ── Configuração da página ────────────────────────────────────────────
 st.set_page_config(
     page_title="VegSP 🌱",
     page_icon="🌱",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-# ── Estilos ───────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    /* Fundo e fonte geral */
     html, body, [class*="css"] { font-family: 'Segoe UI', sans-serif; }
 
-    /* Header principal */
     .vegsp-header {
         background: linear-gradient(135deg, #2E7D32 0%, #66BB6A 100%);
-        padding: 2rem 2rem 1.5rem 2rem;
+        padding: 1.5rem 1.5rem 1.2rem 1.5rem;
         border-radius: 16px;
         color: white;
         text-align: center;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.2rem;
     }
-    .vegsp-header h1 { font-size: 2.8rem; margin: 0; letter-spacing: 2px; }
-    .vegsp-header p  { font-size: 1.1rem; margin: 0.4rem 0 0 0; opacity: 0.9; }
+    .vegsp-header h1 { font-size: 2.4rem; margin: 0; letter-spacing: 2px; }
+    .vegsp-header p  { font-size: 1rem; margin: 0.3rem 0 0 0; opacity: 0.9; }
 
-    /* Cards de estabelecimento */
     .card {
         border-radius: 14px;
-        padding: 1.2rem 1.4rem;
-        margin-bottom: 1rem;
+        padding: 1rem 1.2rem;
+        margin-bottom: 0.9rem;
         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         border-left: 6px solid;
     }
@@ -41,59 +36,63 @@ st.markdown("""
     .card-vegetariano { background:#FFFDE7; border-color:#F9A825; }
     .card-opcoes      { background:#E3F2FD; border-color:#1565C0; }
 
-    .card h3 { margin: 0 0 0.3rem 0; font-size: 1.15rem; }
+    .card h3 { margin: 0 0 0.3rem 0; font-size: 1.1rem; }
     .card .badge {
         display: inline-block;
         padding: 2px 10px;
         border-radius: 20px;
         font-size: 0.75rem;
         font-weight: 600;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.4rem;
+        margin-right: 6px;
     }
     .badge-vegano      { background:#2E7D32; color:white; }
     .badge-vegetariano { background:#F9A825; color:white; }
     .badge-opcoes      { background:#1565C0; color:white; }
 
-    .card .info { font-size: 0.88rem; color: #555; margin: 0.15rem 0; }
-    .card .aberto { color: #2E7D32; font-weight: 700; }
-    .card .fechado { color: #c62828; font-weight: 700; }
+    .card .info { font-size: 0.86rem; color: #555; margin: 0.12rem 0; }
+    .card .aberto  { color: #2E7D32; font-weight: 700; font-size:0.85rem; }
+    .card .fechado { color: #c62828; font-weight: 700; font-size:0.85rem; }
 
-    /* Legenda */
-    .legenda {
-        display: flex; gap: 1rem; flex-wrap: wrap;
-        margin-bottom: 1rem;
-    }
-    .leg-item {
-        display: flex; align-items: center; gap: 6px;
-        font-size: 0.85rem; font-weight: 600;
-    }
-    .dot { width:14px; height:14px; border-radius:50%; display:inline-block; }
+    .legenda { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:0.8rem; }
+    .leg-item { display:flex; align-items:center; gap:6px; font-size:0.82rem; font-weight:600; }
+    .dot { width:12px; height:12px; border-radius:50%; display:inline-block; }
     .dot-v  { background:#2E7D32; }
     .dot-vl { background:#F9A825; }
     .dot-o  { background:#1565C0; }
 
-    /* Rodapé */
-    .footer {
-        text-align: center;
-        margin-top: 3rem;
-        padding: 1.2rem;
-        border-top: 1px solid #ddd;
-        color: #888;
-        font-size: 0.85rem;
-    }
-    .footer a { color: #2E7D32; text-decoration: none; font-weight: 600; }
+    .contador { font-size:0.88rem; color:#666; margin-bottom:0.8rem; }
 
-    /* Contador */
-    .contador { font-size: 0.9rem; color:#666; margin-bottom: 1rem; }
+    .footer {
+        text-align:center; margin-top:3rem; padding:1rem;
+        border-top:1px solid #ddd; color:#888; font-size:0.82rem;
+    }
+    .footer a { color:#2E7D32; text-decoration:none; font-weight:600; }
+
+    /* Mobile: botão aplicar filtros */
+    @media (max-width: 768px) {
+        .vegsp-header h1 { font-size: 1.8rem; }
+        .vegsp-header p  { font-size: 0.88rem; }
+    }
+
+    /* Destaque no botão aplicar */
+    div[data-testid="stButton"] > button[kind="primary"] {
+        background-color: #2E7D32;
+        border-color: #2E7D32;
+        width: 100%;
+        font-size: 1rem;
+        padding: 0.6rem;
+        border-radius: 10px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Carrega dados ─────────────────────────────────────────────────────
+# ── Dados ─────────────────────────────────────────────────────────────
 ARQUIVO = "VegSP_lista.xlsx"
 ABAS = {
-    "Veganos":                        ("vegano",      "🟢 Vegano"),
-    "Vegetarianos (Ovo Lacto)":       ("vegetariano", "🟡 Vegetariano"),
-    "Com Opções (Vegano+Veg)":        ("opcoes",      "🔵 Com Opções"),
+    "Veganos":                  ("vegano",      "🟢 Vegano"),
+    "Vegetarianos (Ovo Lacto)": ("vegetariano", "🟡 Vegetariano"),
+    "Com Opções (Vegano+Veg)":  ("opcoes",      "🔵 Com Opções"),
 }
 
 @st.cache_data
@@ -102,81 +101,67 @@ def carregar_dados():
     xl = pd.ExcelFile(ARQUIVO)
     for aba, (tipo, rotulo) in ABAS.items():
         if aba in xl.sheet_names:
-            df = pd.read_excel(xl, sheet_name=aba, header=2)   # linha 3 = cabeçalho
+            df = pd.read_excel(xl, sheet_name=aba, header=2)
             df.columns = [
                 "nome", "tipo_estab", "culinaria",
                 "bairro", "endereco", "hora_abre", "hora_fecha",
                 "dias", "contato", "obs"
             ]
             df = df.dropna(subset=["nome"])
-            df["tipo"] = tipo
+            df = df[df["nome"].astype(str).str.strip() != ""]
+            df["tipo"]   = tipo
             df["rotulo"] = rotulo
             frames.append(df)
-    if frames:
-        return pd.concat(frames, ignore_index=True)
-    return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 df = carregar_dados()
 
-# ── Função: está aberto agora? ────────────────────────────────────────
+# ── Aberto agora ──────────────────────────────────────────────────────
 DIAS_MAP = {
-    "seg": 0, "ter": 1, "qua": 2, "qui": 3,
-    "sex": 4, "sáb": 5, "sab": 5, "dom": 6,
+    "seg":0,"ter":1,"qua":2,"qui":3,
+    "sex":4,"sáb":5,"sab":5,"dom":6,
 }
 
-def dias_funcionando(texto_dias):
-    """Retorna set de índices weekday (0=seg … 6=dom)."""
-    if not isinstance(texto_dias, str):
+def dias_funcionando(texto):
+    if not isinstance(texto, str):
         return set(range(7))
-    texto = texto_dias.lower()
+    t = texto.lower()
     ativos = set()
-    # Intervalos como "seg a sex"
-    for m in re.finditer(r'(\w+)\s+a\s+(\w+)', texto):
+    for m in re.finditer(r'(\w+)\s+a\s+(\w+)', t):
         ini = DIAS_MAP.get(m.group(1)[:3])
         fim = DIAS_MAP.get(m.group(2)[:3])
         if ini is not None and fim is not None:
             if fim >= ini:
-                ativos.update(range(ini, fim + 1))
+                ativos.update(range(ini, fim+1))
             else:
                 ativos.update(range(ini, 7))
-                ativos.update(range(0, fim + 1))
-    # Dias avulsos
+                ativos.update(range(0, fim+1))
     for abrev, idx in DIAS_MAP.items():
-        if abrev in texto:
+        if abrev in t:
             ativos.add(idx)
     return ativos if ativos else set(range(7))
 
 def esta_aberto(row):
     try:
-        agora = datetime.now()
-        weekday = agora.weekday()
-        hora_atual = agora.hour * 60 + agora.minute
-
-        dias = dias_funcionando(row["dias"])
-        if weekday not in dias:
+        agora    = datetime.now()
+        weekday  = agora.weekday()
+        hora_min = agora.hour * 60 + agora.minute
+        if weekday not in dias_funcionando(row["dias"]):
             return False
-
-        def to_min(val):
-            if pd.isna(val):
-                return None
-            s = str(val).strip()
+        def to_min(v):
+            if pd.isna(v): return None
+            s = str(v).strip()
             if ":" in s:
                 h, m = s.split(":")
-                return int(h) * 60 + int(m)
-            try:
-                h = int(float(s))
-                return h * 60
-            except:
-                return None
-
+                return int(h)*60 + int(m)
+            try: return int(float(s))*60
+            except: return None
         abre  = to_min(row["hora_abre"])
         fecha = to_min(row["hora_fecha"])
-        if abre is None or fecha is None:
-            return None   # Sem info
-
-        if fecha < abre:   # passa da meia-noite
-            return hora_atual >= abre or hora_atual <= fecha
-        return abre <= hora_atual <= fecha
+        if abre is None or fecha is None: return None
+        if fecha < abre:
+            return hora_min >= abre or hora_min <= fecha
+        return abre <= hora_min <= fecha
     except:
         return None
 
@@ -184,54 +169,82 @@ def esta_aberto(row):
 st.markdown("""
 <div class="vegsp-header">
   <h1>🌱 VegSP</h1>
-  <p>Guia de estabelecimentos veganos e vegetarianos em São Paulo e região metropolitana</p>
+  <p>Guia de estabelecimentos veganos e vegetarianos em São Paulo e região</p>
 </div>
 """, unsafe_allow_html=True)
 
-# ── Sidebar – Filtros ─────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("### 🔍 Filtros")
-
-    aberto_agora = st.toggle("🕐 Aberto agora", value=False)
+# ── Filtros (inline, colapsável — funciona bem no mobile) ─────────────
+with st.expander("🔍 Filtros", expanded=False):
+    col1, col2 = st.columns(2)
+    with col1:
+        aberto_agora = st.toggle("🕐 Aberto agora", value=False)
+    with col2:
+        busca_nome = st.text_input("🔎 Nome", placeholder="Ex: Quintal Vegano")
 
     categorias = st.multiselect(
-        "Categoria",
+        "Categoria (selecione uma ou mais)",
         ["🟢 Vegano", "🟡 Vegetariano", "🔵 Com Opções"],
         default=["🟢 Vegano", "🟡 Vegetariano", "🔵 Com Opções"],
+        help="Selecione qualquer combinação — mostra estabelecimentos que se encaixam em QUALQUER uma das categorias marcadas"
     )
 
-    tipos_disponiveis = sorted(df["tipo_estab"].dropna().unique()) if not df.empty else []
-    tipo_sel = st.multiselect("Tipo de estabelecimento", tipos_disponiveis)
+    col3, col4 = st.columns(2)
+    with col3:
+        tipos_disp = sorted(df["tipo_estab"].dropna().unique().tolist()) if not df.empty else []
+        tipo_sel = st.multiselect("Tipo de estabelecimento", tipos_disp)
+    with col4:
+        culin_disp = sorted(df["culinaria"].dropna().unique().tolist()) if not df.empty else []
+        culin_sel = st.multiselect("Culinária", culin_disp)
 
-    culinarias_disp = sorted(df["culinaria"].dropna().unique()) if not df.empty else []
-    culinaria_sel = st.multiselect("Tipo de culinária", culinarias_disp)
+    busca_bairro = st.text_input("📍 Bairro ou cidade", placeholder="Ex: Pinheiros, Campinas")
 
-    busca_bairro = st.text_input("📍 Buscar por bairro ou cidade")
+    aplicar = st.button("✅ Aplicar filtros", type="primary")
 
-    busca_nome = st.text_input("🔎 Buscar por nome")
+# Guarda filtros no session_state ao clicar em Aplicar
+if "filtros" not in st.session_state:
+    st.session_state.filtros = {
+        "aberto_agora": False,
+        "categorias": ["🟢 Vegano", "🟡 Vegetariano", "🔵 Com Opções"],
+        "tipo_sel": [], "culin_sel": [], "busca_bairro": "", "busca_nome": "",
+    }
+
+if aplicar:
+    st.session_state.filtros = {
+        "aberto_agora": aberto_agora,
+        "categorias":   categorias,
+        "tipo_sel":     tipo_sel,
+        "culin_sel":    culin_sel,
+        "busca_bairro": busca_bairro,
+        "busca_nome":   busca_nome,
+    }
+
+f = st.session_state.filtros
 
 # ── Filtragem ─────────────────────────────────────────────────────────
 resultado = df.copy() if not df.empty else pd.DataFrame()
 
 if not resultado.empty:
-    # Categoria
     map_cat = {
         "🟢 Vegano":      "vegano",
         "🟡 Vegetariano": "vegetariano",
         "🔵 Com Opções":  "opcoes",
     }
-    tipos_filtro = [map_cat[c] for c in categorias if c in map_cat]
-    resultado = resultado[resultado["tipo"].isin(tipos_filtro)]
+    # OR entre categorias: isin já faz isso corretamente
+    tipos_filtro = [map_cat[c] for c in f["categorias"] if c in map_cat]
+    if tipos_filtro:
+        resultado = resultado[resultado["tipo"].isin(tipos_filtro)]
+    else:
+        resultado = resultado.iloc[0:0]  # nenhuma categoria = nenhum resultado
 
-    if tipo_sel:
-        resultado = resultado[resultado["tipo_estab"].isin(tipo_sel)]
-    if culinaria_sel:
-        resultado = resultado[resultado["culinaria"].isin(culinaria_sel)]
-    if busca_bairro:
-        resultado = resultado[resultado["bairro"].str.contains(busca_bairro, case=False, na=False)]
-    if busca_nome:
-        resultado = resultado[resultado["nome"].str.contains(busca_nome, case=False, na=False)]
-    if aberto_agora:
+    if f["tipo_sel"]:
+        resultado = resultado[resultado["tipo_estab"].isin(f["tipo_sel"])]
+    if f["culin_sel"]:
+        resultado = resultado[resultado["culinaria"].isin(f["culin_sel"])]
+    if f["busca_bairro"].strip():
+        resultado = resultado[resultado["bairro"].str.contains(f["busca_bairro"], case=False, na=False)]
+    if f["busca_nome"].strip():
+        resultado = resultado[resultado["nome"].str.contains(f["busca_nome"], case=False, na=False)]
+    if f["aberto_agora"]:
         resultado["_aberto"] = resultado.apply(esta_aberto, axis=1)
         resultado = resultado[resultado["_aberto"] == True]
 
@@ -246,7 +259,7 @@ st.markdown("""
 
 # ── Resultados ────────────────────────────────────────────────────────
 if resultado.empty:
-    st.info("Nenhum estabelecimento encontrado com os filtros selecionados.")
+    st.info("Nenhum estabelecimento encontrado. Ajuste os filtros ou adicione mais locais na planilha! 🌱")
 else:
     total = len(resultado)
     st.markdown(f'<p class="contador">Exibindo <strong>{total}</strong> estabelecimento{"s" if total != 1 else ""}</p>', unsafe_allow_html=True)
@@ -255,24 +268,19 @@ else:
         tipo   = row["tipo"]
         rotulo = row["rotulo"]
 
-        css_card  = f"card-{tipo}"
-        css_badge = f"badge-{tipo}"
-
-        # Status aberto/fechado
-        status_aberto = esta_aberto(row)
-        if aberto_agora:
+        status = esta_aberto(row)
+        if status is True:
             status_html = '<span class="aberto">🟢 Aberto agora</span>'
-        elif status_aberto is True:
-            status_html = '<span class="aberto">🟢 Aberto agora</span>'
-        elif status_aberto is False:
+        elif status is False:
             status_html = '<span class="fechado">🔴 Fechado agora</span>'
         else:
             status_html = ""
 
-        dias_txt   = row["dias"] if pd.notna(row.get("dias")) else "—"
-        hora_txt   = ""
+        hora_txt = ""
         if pd.notna(row.get("hora_abre")) and pd.notna(row.get("hora_fecha")):
             hora_txt = f'{str(row["hora_abre"]).strip()} – {str(row["hora_fecha"]).strip()}'
+
+        dias_txt = row["dias"] if pd.notna(row.get("dias")) else "—"
 
         contato = row.get("contato", "")
         contato_html = ""
@@ -286,16 +294,14 @@ else:
         obs_html = f'<p class="info">💬 {obs}</p>' if pd.notna(obs) and str(obs).strip() else ""
 
         st.markdown(f"""
-        <div class="card {css_card}">
-          <span class="badge {css_badge}">{rotulo}</span>
-          {status_html}
+        <div class="card card-{tipo}">
+          <span class="badge badge-{tipo}">{rotulo}</span>{status_html}
           <h3>{row['nome']}</h3>
           <p class="info">🍽️ {row.get('tipo_estab','—')} &nbsp;|&nbsp; 🥘 {row.get('culinaria','—')}</p>
           <p class="info">📍 {row.get('bairro','—')}</p>
           <p class="info">🏠 {row.get('endereco','—')}</p>
           <p class="info">⏰ {hora_txt} &nbsp;|&nbsp; 📅 {dias_txt}</p>
-          {contato_html}
-          {obs_html}
+          {contato_html}{obs_html}
         </div>
         """, unsafe_allow_html=True)
 
