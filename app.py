@@ -1,5 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
+from streamlit_js_eval import get_geolocation
 import pandas as pd
 from datetime import datetime
 import re, math, hashlib
@@ -183,32 +184,21 @@ st.markdown("""
 # ── Geolocalização AUTOMÁTICA ─────────────────────────────────────────
 # JS roda na carga da página, sem botão, sem filtro
 # Salva lat/lng nos query params e recarrega se ainda não tiver
-params = st.query_params
-user_lat = float(params.get("user_lat") or 0)
-user_lng = float(params.get("user_lng") or 0)
-tem_loc  = user_lat != 0 and user_lng != 0
+# get_geolocation() pede permissão ao browser automaticamente na carga
+# Retorna None na 1ª renderização, depois retorna as coords (re-render automático)
+loc = get_geolocation()
 
-# Injeta JS que pede localização automaticamente (só 1x, quando não há coords)
-if not tem_loc:
-    components.html("""
-    <script>
-    (function() {
-        // Só pede se ainda não tiver nos params
-        const url = new URL(window.parent.location.href);
-        if (url.searchParams.get('user_lat')) return;
-        if (!navigator.geolocation) return;
-        navigator.geolocation.getCurrentPosition(
-            function(pos) {
-                url.searchParams.set('user_lat', pos.coords.latitude.toFixed(6));
-                url.searchParams.set('user_lng', pos.coords.longitude.toFixed(6));
-                window.parent.location.replace(url.toString());
-            },
-            function(err) { /* Permissão negada — continua sem localização */ },
-            { enableHighAccuracy: true, timeout: 8000 }
-        );
-    })();
-    </script>
-    """, height=1)
+user_lat = 0.0
+user_lng = 0.0
+tem_loc  = False
+
+if loc and isinstance(loc, dict) and loc.get("coords"):
+    try:
+        user_lat = float(loc["coords"]["latitude"])
+        user_lng = float(loc["coords"]["longitude"])
+        tem_loc  = True
+    except:
+        pass
 
 if tem_loc:
     st.markdown('<span class="loc-pill">📍 Ordenando pelo mais próximo de você</span>',
