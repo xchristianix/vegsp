@@ -187,9 +187,13 @@ st.markdown("""
 # Componente de geolocalização embutido — cacheado para não recriar a cada rerun
 @st.cache_resource
 def _criar_geo_componente():
-    """Cria o componente apenas UMA vez por sessão do servidor."""
-    import tempfile
-    geo_dir = tempfile.mkdtemp()
+    """
+    Cria o componente uma única vez.
+    Usa os.getcwd() — diretório do app, acessível pelo Streamlit Cloud.
+    tempfile.mkdtemp() retorna /tmp/ que o Streamlit Cloud não consegue servir.
+    """
+    geo_dir = os.path.join(os.getcwd(), "_geo_comp")
+    os.makedirs(geo_dir, exist_ok=True)
     with open(os.path.join(geo_dir, "index.html"), "w", encoding="utf-8") as f:
         f.write("""<!DOCTYPE html>
 <html>
