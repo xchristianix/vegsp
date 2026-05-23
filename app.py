@@ -1,6 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
-from streamlit_js_eval import get_geolocation
+import os
 import pandas as pd
 from datetime import datetime
 import re, math, hashlib
@@ -184,25 +184,33 @@ st.markdown("""
 # ── Geolocalização AUTOMÁTICA ─────────────────────────────────────────
 # JS roda na carga da página, sem botão, sem filtro
 # Salva lat/lng nos query params e recarrega se ainda não tiver
-# get_geolocation() pede permissão ao browser automaticamente na carga
-# Retorna None na 1ª renderização, depois retorna as coords (re-render automático)
-loc = get_geolocation()
+# Componente próprio de geolocalização
+# — funciona no desktop (automático) e no mobile (botão com gesto do usuário)
+_geo_comp = components.declare_component(
+    "geo_location",
+    path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "geo_component")
+)
+geo_data = _geo_comp(key="geoloc", default=None)
 
 user_lat = 0.0
 user_lng = 0.0
 tem_loc  = False
 
-if loc and isinstance(loc, dict) and loc.get("coords"):
+if geo_data and isinstance(geo_data, dict):
     try:
-        user_lat = float(loc["coords"]["latitude"])
-        user_lng = float(loc["coords"]["longitude"])
-        tem_loc  = True
+        user_lat = float(geo_data["lat"])
+        user_lng = float(geo_data["lng"])
+        tem_loc  = user_lat != 0
     except:
         pass
 
 if tem_loc:
-    st.markdown('<span class="loc-pill">📍 Ordenando pelo mais próximo de você</span>',
-                unsafe_allow_html=True)
+    acc = geo_data.get("accuracy", "")
+    acc_txt = f" (±{acc}m)" if acc else ""
+    st.markdown(
+        f'<span class="loc-pill">📍 Ordenando pelo mais próximo de você{acc_txt}</span>',
+        unsafe_allow_html=True
+    )
 
 # ── Filtros colapsáveis ───────────────────────────────────────────────
 with st.expander("🔍 Filtros", expanded=False):
