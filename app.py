@@ -25,9 +25,10 @@ st.markdown("""
     .vegsp-header h1 { font-size: 2.4rem; margin: 0; letter-spacing: 2px; }
     .vegsp-header p  { font-size: 1rem; margin: 0.3rem 0 0 0; opacity: 0.9; }
 
-    .card {
+    /* Card wrapper — só cor de fundo e borda, sem texto HTML dentro */
+    .card-wrap {
         border-radius: 14px;
-        padding: 1rem 1.2rem;
+        padding: 0.8rem 1.2rem 0.6rem 1.2rem;
         margin-bottom: 0.9rem;
         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         border-left: 6px solid;
@@ -36,23 +37,31 @@ st.markdown("""
     .card-vegetariano { background:#FFFDE7; border-color:#F9A825; }
     .card-opcoes      { background:#E3F2FD; border-color:#1565C0; }
 
-    .card h3 { margin: 0 0 0.3rem 0; font-size: 1.1rem; }
-    .card .badge {
+    .badge {
         display: inline-block;
         padding: 2px 10px;
         border-radius: 20px;
         font-size: 0.75rem;
         font-weight: 600;
-        margin-bottom: 0.4rem;
         margin-right: 6px;
     }
     .badge-vegano      { background:#2E7D32; color:white; }
     .badge-vegetariano { background:#F9A825; color:white; }
     .badge-opcoes      { background:#1565C0; color:white; }
 
-    .card .info { font-size: 0.86rem; color: #555; margin: 0.12rem 0; }
-    .card .aberto  { color: #2E7D32; font-weight: 700; font-size:0.85rem; }
-    .card .fechado { color: #c62828; font-weight: 700; font-size:0.85rem; }
+    .status-aberto  { color:#2E7D32; font-weight:700; font-size:0.82rem; }
+    .status-fechado { color:#c62828; font-weight:700; font-size:0.82rem; }
+
+    .card-info { font-size:0.85rem; color:#555; margin: 0.1rem 0; line-height:1.5; }
+    .card-info a { color:#1565C0; }
+
+    /* Nome do estabelecimento — via st.markdown nativo, não HTML */
+    .nome-estab {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #1a1a1a;
+        margin: 0.2rem 0 0.5rem 0;
+    }
 
     .legenda { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:0.8rem; }
     .leg-item { display:flex; align-items:center; gap:6px; font-size:0.82rem; font-weight:600; }
@@ -69,20 +78,22 @@ st.markdown("""
     }
     .footer a { color:#2E7D32; text-decoration:none; font-weight:600; }
 
-    /* Mobile: botão aplicar filtros */
-    @media (max-width: 768px) {
-        .vegsp-header h1 { font-size: 1.8rem; }
-        .vegsp-header p  { font-size: 0.88rem; }
-    }
-
-    /* Destaque no botão aplicar */
-    div[data-testid="stButton"] > button[kind="primary"] {
-        background-color: #2E7D32;
-        border-color: #2E7D32;
+    /* Botão aplicar */
+    div[data-testid="stButton"] > button {
+        background-color: #2E7D32 !important;
+        color: white !important;
+        border: none !important;
         width: 100%;
         font-size: 1rem;
-        padding: 0.6rem;
+        padding: 0.55rem;
         border-radius: 10px;
+    }
+
+    /* Elimina padding extra no mobile */
+    @media (max-width: 768px) {
+        .vegsp-header h1 { font-size: 1.9rem; }
+        .vegsp-header p  { font-size: 0.85rem; }
+        .card-wrap { padding: 0.7rem 0.9rem 0.5rem 0.9rem; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -117,10 +128,7 @@ def carregar_dados():
 df = carregar_dados()
 
 # ── Aberto agora ──────────────────────────────────────────────────────
-DIAS_MAP = {
-    "seg":0,"ter":1,"qua":2,"qui":3,
-    "sex":4,"sáb":5,"sab":5,"dom":6,
-}
+DIAS_MAP = {"seg":0,"ter":1,"qua":2,"qui":3,"sex":4,"sáb":5,"sab":5,"dom":6}
 
 def dias_funcionando(texto):
     if not isinstance(texto, str):
@@ -144,9 +152,8 @@ def dias_funcionando(texto):
 def esta_aberto(row):
     try:
         agora    = datetime.now()
-        weekday  = agora.weekday()
         hora_min = agora.hour * 60 + agora.minute
-        if weekday not in dias_funcionando(row["dias"]):
+        if agora.weekday() not in dias_funcionando(row["dias"]):
             return False
         def to_min(v):
             if pd.isna(v): return None
@@ -173,7 +180,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Filtros (inline, colapsável — funciona bem no mobile) ─────────────
+# ── Filtros colapsáveis ───────────────────────────────────────────────
 with st.expander("🔍 Filtros", expanded=False):
     col1, col2 = st.columns(2)
     with col1:
@@ -182,25 +189,24 @@ with st.expander("🔍 Filtros", expanded=False):
         busca_nome = st.text_input("🔎 Nome", placeholder="Ex: Quintal Vegano")
 
     categorias = st.multiselect(
-        "Categoria (selecione uma ou mais)",
+        "Categoria",
         ["🟢 Vegano", "🟡 Vegetariano", "🔵 Com Opções"],
         default=["🟢 Vegano", "🟡 Vegetariano", "🔵 Com Opções"],
-        help="Selecione qualquer combinação — mostra estabelecimentos que se encaixam em QUALQUER uma das categorias marcadas"
     )
 
     col3, col4 = st.columns(2)
     with col3:
         tipos_disp = sorted(df["tipo_estab"].dropna().unique().tolist()) if not df.empty else []
-        tipo_sel = st.multiselect("Tipo de estabelecimento", tipos_disp)
+        tipo_sel = st.multiselect("Tipo", tipos_disp)
     with col4:
         culin_disp = sorted(df["culinaria"].dropna().unique().tolist()) if not df.empty else []
         culin_sel = st.multiselect("Culinária", culin_disp)
 
     busca_bairro = st.text_input("📍 Bairro ou cidade", placeholder="Ex: Pinheiros, Campinas")
 
-    aplicar = st.button("✅ Aplicar filtros", type="primary")
+    aplicar = st.button("✅ Aplicar filtros")
 
-# Guarda filtros no session_state ao clicar em Aplicar
+# session_state para persistir filtros após fechar o expander
 if "filtros" not in st.session_state:
     st.session_state.filtros = {
         "aberto_agora": False,
@@ -229,12 +235,8 @@ if not resultado.empty:
         "🟡 Vegetariano": "vegetariano",
         "🔵 Com Opções":  "opcoes",
     }
-    # OR entre categorias: isin já faz isso corretamente
     tipos_filtro = [map_cat[c] for c in f["categorias"] if c in map_cat]
-    if tipos_filtro:
-        resultado = resultado[resultado["tipo"].isin(tipos_filtro)]
-    else:
-        resultado = resultado.iloc[0:0]  # nenhuma categoria = nenhum resultado
+    resultado = resultado[resultado["tipo"].isin(tipos_filtro)] if tipos_filtro else resultado.iloc[0:0]
 
     if f["tipo_sel"]:
         resultado = resultado[resultado["tipo_estab"].isin(f["tipo_sel"])]
@@ -262,25 +264,24 @@ if resultado.empty:
     st.info("Nenhum estabelecimento encontrado. Ajuste os filtros ou adicione mais locais na planilha! 🌱")
 else:
     total = len(resultado)
-    st.markdown(f'<p class="contador">Exibindo <strong>{total}</strong> estabelecimento{"s" if total != 1 else ""}</p>', unsafe_allow_html=True)
+    s = "s" if total != 1 else ""
+    st.markdown(f'<p class="contador">Exibindo <strong>{total}</strong> estabelecimento{s}</p>', unsafe_allow_html=True)
 
     for _, row in resultado.iterrows():
         tipo   = row["tipo"]
         rotulo = row["rotulo"]
 
         status = esta_aberto(row)
+        status_html = ""
         if status is True:
-            status_html = '<span class="aberto">🟢 Aberto agora</span>'
+            status_html = '<span class="status-aberto">🟢 Aberto agora</span>'
         elif status is False:
-            status_html = '<span class="fechado">🔴 Fechado agora</span>'
-        else:
-            status_html = ""
+            status_html = '<span class="status-fechado">🔴 Fechado agora</span>'
 
-        hora_txt = ""
+        hora_txt = "—"
         if pd.notna(row.get("hora_abre")) and pd.notna(row.get("hora_fecha")):
             hora_txt = f'{str(row["hora_abre"]).strip()} – {str(row["hora_fecha"]).strip()}'
-
-        dias_txt = row["dias"] if pd.notna(row.get("dias")) else "—"
+        dias_txt = str(row["dias"]).strip() if pd.notna(row.get("dias")) else "—"
 
         contato = row.get("contato", "")
         contato_html = ""
@@ -288,19 +289,26 @@ else:
             link = str(contato).strip()
             if not link.startswith("http"):
                 link = "https://" + link
-            contato_html = f'<p class="info">🔗 <a href="{link}" target="_blank">{str(contato).strip()}</a></p>'
+            contato_html = f'<p class="card-info">🔗 <a href="{link}" target="_blank">{str(contato).strip()}</a></p>'
 
         obs = row.get("obs", "")
-        obs_html = f'<p class="info">💬 {obs}</p>' if pd.notna(obs) and str(obs).strip() else ""
+        obs_html = f'<p class="card-info">💬 {obs}</p>' if pd.notna(obs) and str(obs).strip() else ""
 
+        nome = str(row["nome"])
+        tipo_estab = str(row.get("tipo_estab", "—"))
+        culinaria  = str(row.get("culinaria",  "—"))
+        bairro     = str(row.get("bairro",     "—"))
+        endereco   = str(row.get("endereco",   "—"))
+
+        # Card: div de fundo + conteúdo misto (HTML p/ badges, st.markdown p/ nome)
         st.markdown(f"""
-        <div class="card card-{tipo}">
+        <div class="card-wrap card-{tipo}">
           <span class="badge badge-{tipo}">{rotulo}</span>{status_html}
-          <h3>{row['nome']}</h3>
-          <p class="info">🍽️ {row.get('tipo_estab','—')} &nbsp;|&nbsp; 🥘 {row.get('culinaria','—')}</p>
-          <p class="info">📍 {row.get('bairro','—')}</p>
-          <p class="info">🏠 {row.get('endereco','—')}</p>
-          <p class="info">⏰ {hora_txt} &nbsp;|&nbsp; 📅 {dias_txt}</p>
+          <p class="nome-estab">{nome}</p>
+          <p class="card-info">🍽️ {tipo_estab} &nbsp;|&nbsp; 🥘 {culinaria}</p>
+          <p class="card-info">📍 {bairro}</p>
+          <p class="card-info">🏠 {endereco}</p>
+          <p class="card-info">⏰ {hora_txt} &nbsp;|&nbsp; 📅 {dias_txt}</p>
           {contato_html}{obs_html}
         </div>
         """, unsafe_allow_html=True)
