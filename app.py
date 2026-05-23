@@ -106,8 +106,20 @@ ABAS = {
     "Com Opções (Vegano+Veg)":  ("opcoes",      "🔵 Com Opções"),
 }
 
+import os, hashlib
+
+def _file_hash(path):
+    h = hashlib.md5()
+    try:
+        with open(path, "rb") as f:
+            h.update(f.read())
+    except:
+        pass
+    return h.hexdigest()
+
 @st.cache_data
-def carregar_dados():
+def carregar_dados(file_hash: str):
+    # file_hash força o Streamlit a reler quando a planilha mudar
     frames = []
     xl = pd.ExcelFile(ARQUIVO)
     for aba, (tipo, rotulo) in ABAS.items():
@@ -125,7 +137,7 @@ def carregar_dados():
             frames.append(df)
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
-df = carregar_dados()
+df = carregar_dados(_file_hash(ARQUIVO))
 
 # ── Aberto agora ──────────────────────────────────────────────────────
 DIAS_MAP = {"seg":0,"ter":1,"qua":2,"qui":3,"sex":4,"sáb":5,"sab":5,"dom":6}
