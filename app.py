@@ -6,7 +6,6 @@ import pandas as pd
 from datetime import datetime
 import re, math, hashlib
 
-# ── Configuração da Página ───────────────────────────────────────────
 st.set_page_config(
     page_title="VegSP 🌱",
     page_icon="🌱",
@@ -14,20 +13,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ── Google Analytics ──────────────────────────────────────────────────
-GA_ID = "G-KS41R8XPW2"
-ga_code = f"""
-<script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){{dataLayer.push(arguments);}}
-  gtag('js', new Date());
-  gtag('config', '{GA_ID}');
-</script>
-"""
-components.html(ga_code, height=0, width=0)
-
-# ── Estilos CSS ───────────────────────────────────────────────────────
 st.markdown("""
 <style>
     html, body, [class*="css"] { font-family: 'Segoe UI', sans-serif; }
@@ -112,7 +97,7 @@ st.markdown("""
 # ── Dados ─────────────────────────────────────────────────────────────
 ARQUIVO = "VegSP_lista.xlsx"
 ABAS = {
-    "Veganos":                ("vegano",      "🟢 Vegano"),
+    "Veganos":                  ("vegano",      "🟢 Vegano"),
     "Vegetarianos (Ovo Lacto)": ("vegetariano", "🟡 Vegetariano"),
     "Com Opções (Vegano+Veg)":  ("opcoes",      "🔵 Com Opções"),
 }
@@ -198,14 +183,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Geolocalização AUTOMÁTICA ─────────────────────────────────────────
+# JS roda na carga da página, sem botão, sem filtro
+# Salva lat/lng nos query params e recarrega se ainda não tiver
+# Componente de geolocalização embutido — cacheado para não recriar a cada rerun
+# Localização cacheada no session_state para sobreviver a reruns
 if "user_lat" not in st.session_state:
     st.session_state.user_lat = 0.0
     st.session_state.user_lng = 0.0
 
+# Só pede localização enquanto não tiver
 if st.session_state.user_lat == 0:
+    # JS embutido com botão visível:
+    # - Desktop/Android: tenta automático silencioso
+    # - iOS: mostra botão (iOS exige gesto do usuário no mesmo frame JS)
     _loc = streamlit_js_eval(
         js_expressions="""
         await new Promise(resolve => {
+            // Estilos
             const s = document.createElement('style');
             s.textContent = `
                 body { margin:0; padding:4px 0; font-family:'Segoe UI',sans-serif; background:transparent; }
@@ -216,6 +210,7 @@ if st.session_state.user_lat == 0:
             `;
             document.head.appendChild(s);
 
+            // Botão (fallback para iOS)
             const btn = document.createElement('button');
             btn.id = 'gbtn';
             btn.textContent = '📍 Usar minha localização';
@@ -239,10 +234,11 @@ if st.session_state.user_lat == 0:
                 );
             };
 
+            // Tentativa automática silenciosa (funciona no desktop e Android)
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                     function(pos) { enviar(pos); },
-                    function() { },
+                    function() { /* silencioso — iOS vai usar o botão */ },
                     { enableHighAccuracy: false, timeout: 3000, maximumAge: 120000 }
                 );
             }
@@ -279,6 +275,7 @@ with st.expander("🔍 Filtros", expanded=False):
 
     col3, col4 = st.columns(2)
     with col3:
+        # Categoria como dropdown (multiselect igual aos outros)
         cat_opcoes = ["Todos", "🟢 Vegano", "🟡 Vegetariano", "🔵 Com Opções"]
         cat_sel = st.multiselect("Categoria", cat_opcoes[1:], default=cat_opcoes[1:])
     with col4:
@@ -290,6 +287,7 @@ with st.expander("🔍 Filtros", expanded=False):
         culin_disp = sorted(df["culinaria"].dropna().unique().tolist()) if not df.empty else []
         culin_sel = st.multiselect("Culinária", culin_disp)
     with col6:
+        # Bairro com autocomplete via selectbox
         bairros_disp = ["(Todos os bairros)"] + sorted(
             df["bairro"].dropna().unique().tolist()) if not df.empty else ["(Todos os bairros)"]
         bairro_sel = st.selectbox("📍 Bairro ou cidade", bairros_disp,
@@ -297,6 +295,7 @@ with st.expander("🔍 Filtros", expanded=False):
 
     aplicar = st.button("✅ Aplicar filtros", use_container_width=True)
 
+# Session state para persistir filtros
 if "filtros" not in st.session_state:
     st.session_state.filtros = {
         "aberto_agora": False,
@@ -341,6 +340,7 @@ if not resultado.empty:
         resultado["_ab"] = resultado.apply(esta_aberto, axis=1)
         resultado = resultado[resultado["_ab"] == True]
 
+    # Calcular distância e ordenar automaticamente se tiver localização
     if tem_loc:
         def calc_dist(row):
             try:
@@ -413,8 +413,6 @@ else:
 st.markdown("""
 <div class="footer">
   Feito com 🌱 por <a href="https://instagram.com/chrisporto80" target="_blank">@chrisporto80</a>
-</div>
-""", unsafe_allow_html=True)
   &nbsp;|&nbsp; VegSP — Guia vegano e vegetariano de São Paulo
 </div>
 """, unsafe_allow_html=True)
