@@ -1,6 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
-from streamlit_js_eval import get_geolocation
+from streamlit_js_eval import streamlit_js_eval
 import os
 import pandas as pd
 from datetime import datetime
@@ -193,11 +193,65 @@ if "user_lat" not in st.session_state:
 
 # Só pede localização enquanto não tiver
 if st.session_state.user_lat == 0:
-    _loc = get_geolocation()
-    if _loc and isinstance(_loc, dict) and _loc.get("coords"):
+    # JS embutido com botão visível:
+    # - Desktop/Android: tenta automático silencioso
+    # - iOS: mostra botão (iOS exige gesto do usuário no mesmo frame JS)
+    _loc = streamlit_js_eval(
+        js_expressions="""
+        await new Promise(resolve => {
+            // Estilos
+            const s = document.createElement('style');
+            s.textContent = `
+                body { margin:0; padding:4px 0; font-family:'Segoe UI',sans-serif; background:transparent; }
+                #gbtn { background:#2E7D32; color:#fff; border:none; border-radius:20px;
+                        padding:6px 16px; font-size:13px; cursor:pointer; }
+                #gbtn:disabled { background:#81C784; cursor:default; }
+                #gmsg { font-size:12px; color:#666; margin-left:8px; }
+            `;
+            document.head.appendChild(s);
+
+            // Botão (fallback para iOS)
+            const btn = document.createElement('button');
+            btn.id = 'gbtn';
+            btn.textContent = '📍 Usar minha localização';
+            document.body.appendChild(btn);
+            const msg = document.createElement('span');
+            msg.id = 'gmsg';
+            document.body.appendChild(msg);
+
+            function enviar(pos) {
+                document.body.innerHTML =
+                    '<span style="color:#2E7D32;font-size:13px">✅ Localização obtida</span>';
+                resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+            }
+
+            btn.onclick = function() {
+                btn.disabled = true; msg.textContent = '⏳ Buscando...';
+                navigator.geolocation.getCurrentPosition(
+                    enviar,
+                    function() { btn.disabled=false; msg.textContent='⚠️ Tente novamente.'; },
+                    { enableHighAccuracy: true, timeout: 12000 }
+                );
+            };
+
+            // Tentativa automática silenciosa (funciona no desktop e Android)
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(pos) { enviar(pos); },
+                    function() { /* silencioso — iOS vai usar o botão */ },
+                    { enableHighAccuracy: false, timeout: 3000, maximumAge: 120000 }
+                );
+            }
+        })
+        """,
+        want_output=True,
+        key="geo_loc",
+        height=38
+    )
+    if _loc and isinstance(_loc, dict) and _loc.get("lat"):
         try:
-            st.session_state.user_lat = float(_loc["coords"]["latitude"])
-            st.session_state.user_lng = float(_loc["coords"]["longitude"])
+            st.session_state.user_lat = float(_loc["lat"])
+            st.session_state.user_lng = float(_loc["lng"])
         except:
             pass
 
