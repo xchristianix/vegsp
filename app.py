@@ -1,5 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
+from streamlit_js_eval import get_geolocation
 import os
 import pandas as pd
 from datetime import datetime
@@ -185,96 +186,28 @@ st.markdown("""
 # JS roda na carga da página, sem botão, sem filtro
 # Salva lat/lng nos query params e recarrega se ainda não tiver
 # Componente de geolocalização embutido — cacheado para não recriar a cada rerun
-@st.cache_resource
-def _criar_geo_componente():
-    """
-    Cria o componente uma única vez.
-    Usa os.getcwd() — diretório do app, acessível pelo Streamlit Cloud.
-    tempfile.mkdtemp() retorna /tmp/ que o Streamlit Cloud não consegue servir.
-    """
-    geo_dir = os.path.join(os.getcwd(), "_geo_comp")
-    os.makedirs(geo_dir, exist_ok=True)
-    with open(os.path.join(geo_dir, "index.html"), "w", encoding="utf-8") as f:
-        f.write("""<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<script src="https://unpkg.com/streamlit-component-lib/dist/streamlit-component-lib.js"></script>
-<style>
-  body { margin:0; padding:4px 0; font-family:'Segoe UI',sans-serif; background:transparent; }
-  #btn {
-    background:#2E7D32; color:white; border:none;
-    border-radius:20px; padding:6px 16px;
-    font-size:0.85rem; cursor:pointer;
-    white-space:nowrap;
-  }
-  #btn:disabled { background:#81C784; cursor:default; }
-  #msg { font-size:0.78rem; color:#666; margin-left:8px; }
-</style>
-</head>
-<body>
-<button id="btn" onclick="pedir()">📍 Usar minha localização</button>
-<span id="msg"></span>
-<script>
-  Streamlit.setComponentReady();
-  // Tenta automático (desktop/Android)
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      function(p){ enviar(p); },
-      function(){ /* silencioso — botão como fallback para iOS */ },
-      { enableHighAccuracy:false, timeout:4000, maximumAge:120000 }
-    );
-  }
-  function pedir() {
-    if (!navigator.geolocation) {
-      document.getElementById('msg').textContent='❌ Não suportado neste dispositivo.';
-      return;
-    }
-    document.getElementById('btn').disabled = true;
-    document.getElementById('msg').textContent = '⏳ Buscando...';
-    navigator.geolocation.getCurrentPosition(
-      function(p){ enviar(p); },
-      function(){ document.getElementById('btn').disabled=false; document.getElementById('msg').textContent='⚠️ Permissão negada.'; },
-      { enableHighAccuracy:true, timeout:12000, maximumAge:60000 }
-    );
-  }
-  function enviar(pos) {
-    var btn = document.getElementById('btn');
-    btn.textContent = '✅ Localização obtida';
-    btn.style.background = '#388E3C';
-    btn.disabled = true;
-    document.getElementById('msg').textContent = '';
-    Streamlit.setComponentValue({
-      lat: pos.coords.latitude,
-      lng: pos.coords.longitude,
-      accuracy: Math.round(pos.coords.accuracy)
-    });
-  }
-</script>
-</body>
-</html>""")
-    return components.declare_component("geo_location", path=geo_dir)
+# Localização cacheada no session_state para sobreviver a reruns
+if "user_lat" not in st.session_state:
+    st.session_state.user_lat = 0.0
+    st.session_state.user_lng = 0.0
 
-_geo_comp = _criar_geo_componente()
-geo_data = _geo_comp(key="geoloc", default=None)
+# Só pede localização enquanto não tiver
+if st.session_state.user_lat == 0:
+    _loc = get_geolocation()
+    if _loc and isinstance(_loc, dict) and _loc.get("coords"):
+        try:
+            st.session_state.user_lat = float(_loc["coords"]["latitude"])
+            st.session_state.user_lng = float(_loc["coords"]["longitude"])
+        except:
+            pass
 
-user_lat = 0.0
-user_lng = 0.0
-tem_loc  = False
-
-if geo_data and isinstance(geo_data, dict):
-    try:
-        user_lat = float(geo_data["lat"])
-        user_lng = float(geo_data["lng"])
-        tem_loc  = user_lat != 0
-    except:
-        pass
+user_lat = st.session_state.user_lat
+user_lng = st.session_state.user_lng
+tem_loc  = user_lat != 0
 
 if tem_loc:
-    acc = geo_data.get("accuracy", "")
-    acc_txt = f" (±{acc}m)" if acc else ""
     st.markdown(
-        f'<span class="loc-pill">📍 Ordenando pelo mais próximo de você{acc_txt}</span>',
+        '<span class="loc-pill">📍 Ordenando pelo mais próximo de você</span>',
         unsafe_allow_html=True
     )
 
