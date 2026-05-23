@@ -1,9 +1,8 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 from datetime import datetime
-import re
-import math
-import hashlib, os
+import re, math, hashlib
 
 st.set_page_config(
     page_title="VegSP 🌱",
@@ -54,9 +53,21 @@ st.markdown("""
     .status-fechado { color:#c62828; font-weight:700; font-size:0.82rem; }
     .distancia      { color:#555; font-size:0.82rem; font-weight:600; }
 
-    .card-info { font-size:0.85rem; color:#555; margin: 0.1rem 0; line-height:1.5; }
+    .card-info { font-size:0.85rem; color:#555; margin:0.1rem 0; line-height:1.5; }
     .card-info a { color:#1565C0; }
     .nome-estab { font-size:1.1rem; font-weight:700; color:#1a1a1a; margin:0.2rem 0 0.4rem 0; }
+
+    .loc-pill {
+        display:inline-block;
+        background:#e8f5e9;
+        border:1px solid #c8e6c9;
+        border-radius:20px;
+        padding:4px 14px;
+        font-size:0.82rem;
+        color:#2E7D32;
+        font-weight:600;
+        margin-bottom:0.8rem;
+    }
 
     .legenda { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:0.8rem; }
     .leg-item { display:flex; align-items:center; gap:6px; font-size:0.82rem; font-weight:600; }
@@ -67,31 +78,11 @@ st.markdown("""
 
     .contador { font-size:0.88rem; color:#666; margin-bottom:0.8rem; }
 
-    .loc-box {
-        background: #f0f7f0;
-        border: 1px solid #c8e6c9;
-        border-radius: 10px;
-        padding: 0.6rem 1rem;
-        margin-bottom: 1rem;
-        font-size: 0.85rem;
-        color: #2E7D32;
-    }
-
     .footer {
         text-align:center; margin-top:3rem; padding:1rem;
         border-top:1px solid #ddd; color:#888; font-size:0.82rem;
     }
     .footer a { color:#2E7D32; text-decoration:none; font-weight:600; }
-
-    div[data-testid="stButton"] > button {
-        background-color: #2E7D32 !important;
-        color: white !important;
-        border: none !important;
-        width: 100%;
-        font-size: 1rem;
-        padding: 0.55rem;
-        border-radius: 10px;
-    }
 
     @media (max-width: 768px) {
         .vegsp-header h1 { font-size: 1.9rem; }
@@ -112,10 +103,8 @@ ABAS = {
 def _file_hash(path):
     h = hashlib.md5()
     try:
-        with open(path, "rb") as f:
-            h.update(f.read())
-    except:
-        pass
+        with open(path, "rb") as f: h.update(f.read())
+    except: pass
     return h.hexdigest()
 
 @st.cache_data
@@ -125,78 +114,62 @@ def carregar_dados(file_hash: str):
     for aba, (tipo, rotulo) in ABAS.items():
         if aba in xl.sheet_names:
             df = pd.read_excel(xl, sheet_name=aba, header=2)
-            # Colunas base
             cols_base = ["nome","tipo_estab","culinaria","bairro","endereco",
                          "hora_abre","hora_fecha","dias","contato","obs"]
-            # Colunas lat/lng (11 e 12)
-            all_cols = list(df.columns)
-            if len(all_cols) >= 12:
+            if len(df.columns) >= 12:
                 df.columns = cols_base + ["lat","lng"] + list(df.columns[12:])
             else:
-                df.columns = cols_base[:len(all_cols)]
-                df["lat"] = None
-                df["lng"] = None
+                df.columns = cols_base[:len(df.columns)]
+                df["lat"] = None; df["lng"] = None
             df = df.dropna(subset=["nome"])
             df = df[df["nome"].astype(str).str.strip() != ""]
-            df["tipo"]   = tipo
-            df["rotulo"] = rotulo
+            df["tipo"] = tipo; df["rotulo"] = rotulo
             frames.append(df)
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 df = carregar_dados(_file_hash(ARQUIVO))
 
-# ── Distância (Haversine) ──────────────────────────────────────────────
+# ── Haversine ─────────────────────────────────────────────────────────
 def haversine(lat1, lon1, lat2, lon2):
-    """Distância em metros entre dois pontos GPS."""
     R = 6371000
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi  = math.radians(lat2 - lat1)
-    dlam  = math.radians(lon2 - lon1)
+    dphi = math.radians(lat2 - lat1)
+    dlam = math.radians(lon2 - lon1)
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlam/2)**2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
-def formatar_distancia(metros):
-    if metros < 1000:
-        return f"📍 {int(metros)} m"
-    return f"📍 {metros/1000:.1f} km"
+def fmt_dist(m):
+    return f"📍 {int(m)} m" if m < 1000 else f"📍 {m/1000:.1f} km"
 
 # ── Aberto agora ──────────────────────────────────────────────────────
 DIAS_MAP = {"seg":0,"ter":1,"qua":2,"qui":3,"sex":4,"sáb":5,"sab":5,"dom":6}
 
-def dias_funcionando(texto):
+def dias_func(texto):
     if not isinstance(texto, str): return set(range(7))
-    t = texto.lower()
-    ativos = set()
+    t = texto.lower(); ativos = set()
     for m in re.finditer(r'(\w+)\s+a\s+(\w+)', t):
-        ini = DIAS_MAP.get(m.group(1)[:3])
-        fim = DIAS_MAP.get(m.group(2)[:3])
+        ini = DIAS_MAP.get(m.group(1)[:3]); fim = DIAS_MAP.get(m.group(2)[:3])
         if ini is not None and fim is not None:
             if fim >= ini: ativos.update(range(ini, fim+1))
-            else:
-                ativos.update(range(ini, 7))
-                ativos.update(range(0, fim+1))
-    for abrev, idx in DIAS_MAP.items():
-        if abrev in t: ativos.add(idx)
+            else: ativos.update(range(ini,7)); ativos.update(range(0,fim+1))
+    for a, i in DIAS_MAP.items():
+        if a in t: ativos.add(i)
     return ativos if ativos else set(range(7))
 
 def esta_aberto(row):
     try:
-        agora    = datetime.now()
-        hora_min = agora.hour * 60 + agora.minute
-        if agora.weekday() not in dias_funcionando(row["dias"]): return False
+        agora = datetime.now(); hm = agora.hour*60 + agora.minute
+        if agora.weekday() not in dias_func(row["dias"]): return False
         def to_min(v):
             if pd.isna(v): return None
             s = str(v).strip()
-            if ":" in s:
-                h, m = s.split(":")
-                return int(h)*60 + int(m)
+            if ":" in s: h,m = s.split(":"); return int(h)*60+int(m)
             try: return int(float(s))*60
             except: return None
-        abre  = to_min(row["hora_abre"])
-        fecha = to_min(row["hora_fecha"])
-        if abre is None or fecha is None: return None
-        if fecha < abre: return hora_min >= abre or hora_min <= fecha
-        return abre <= hora_min <= fecha
+        ab = to_min(row["hora_abre"]); fe = to_min(row["hora_fecha"])
+        if ab is None or fe is None: return None
+        if fe < ab: return hm >= ab or hm <= fe
+        return ab <= hm <= fe
     except: return None
 
 # ── Header ────────────────────────────────────────────────────────────
@@ -207,116 +180,87 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Geolocalização ────────────────────────────────────────────────────
-# Componente HTML que solicita localização e salva no session_state via URL param
-geo_html = """
-<script>
-function getLocation() {
-    if (!navigator.geolocation) {
-        document.getElementById('geo-status').innerText = '❌ Geolocalização não suportada neste dispositivo.';
-        return;
-    }
-    document.getElementById('geo-btn').disabled = true;
-    document.getElementById('geo-status').innerText = '⏳ Buscando localização...';
-    navigator.geolocation.getCurrentPosition(
-        function(pos) {
-            const lat = pos.coords.latitude.toFixed(6);
-            const lng = pos.coords.longitude.toFixed(6);
-            const acc = Math.round(pos.coords.accuracy);
-            // Envia para Streamlit via query param
-            const url = new URL(window.parent.location.href);
-            url.searchParams.set('user_lat', lat);
-            url.searchParams.set('user_lng', lng);
-            window.parent.history.replaceState({}, '', url.toString());
-            document.getElementById('geo-status').innerText =
-                '✅ Localização obtida! Precisão: ±' + acc + 'm. Clique em "Aplicar filtros" para ver as distâncias.';
-            document.getElementById('geo-btn').disabled = false;
-        },
-        function(err) {
-            document.getElementById('geo-status').innerText =
-                '⚠️ Não foi possível obter localização: ' + err.message;
-            document.getElementById('geo-btn').disabled = false;
-        },
-        { enableHighAccuracy: true, timeout: 10000 }
-    );
-}
-</script>
-<div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:0; padding:0;">
-  <button id="geo-btn" onclick="getLocation()"
-    style="background:#2E7D32; color:white; border:none; border-radius:8px;
-           padding:8px 16px; font-size:0.9rem; cursor:pointer; white-space:nowrap;">
-    📍 Usar minha localização
-  </button>
-  <span id="geo-status" style="font-size:0.82rem; color:#555;"></span>
-</div>
-"""
-
-st.components.v1.html(geo_html, height=50)
-
-# Ler coords do query param
+# ── Geolocalização AUTOMÁTICA ─────────────────────────────────────────
+# JS roda na carga da página, sem botão, sem filtro
+# Salva lat/lng nos query params e recarrega se ainda não tiver
 params = st.query_params
-user_lat = float(params.get("user_lat", 0) or 0)
-user_lng = float(params.get("user_lng", 0) or 0)
-tem_localizacao = user_lat != 0 and user_lng != 0
+user_lat = float(params.get("user_lat") or 0)
+user_lng = float(params.get("user_lng") or 0)
+tem_loc  = user_lat != 0 and user_lng != 0
 
-if tem_localizacao:
-    st.markdown(f'<div class="loc-box">📍 Localização ativa — mostrando distâncias a partir de você</div>',
+# Injeta JS que pede localização automaticamente (só 1x, quando não há coords)
+if not tem_loc:
+    components.html("""
+    <script>
+    (function() {
+        // Só pede se ainda não tiver nos params
+        const url = new URL(window.parent.location.href);
+        if (url.searchParams.get('user_lat')) return;
+        if (!navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition(
+            function(pos) {
+                url.searchParams.set('user_lat', pos.coords.latitude.toFixed(6));
+                url.searchParams.set('user_lng', pos.coords.longitude.toFixed(6));
+                window.parent.location.replace(url.toString());
+            },
+            function(err) { /* Permissão negada — continua sem localização */ },
+            { enableHighAccuracy: true, timeout: 8000 }
+        );
+    })();
+    </script>
+    """, height=0)
+
+if tem_loc:
+    st.markdown('<span class="loc-pill">📍 Ordenando pelo mais próximo de você</span>',
                 unsafe_allow_html=True)
 
-# ── Filtros ───────────────────────────────────────────────────────────
+# ── Filtros colapsáveis ───────────────────────────────────────────────
 with st.expander("🔍 Filtros", expanded=False):
     col1, col2 = st.columns(2)
     with col1:
         aberto_agora = st.toggle("🕐 Aberto agora", value=False)
     with col2:
-        busca_nome = st.text_input("🔎 Nome", placeholder="Ex: Quintal Vegano")
-
-    categorias = st.multiselect(
-        "Categoria",
-        ["🟢 Vegano", "🟡 Vegetariano", "🔵 Com Opções"],
-        default=["🟢 Vegano", "🟡 Vegetariano", "🔵 Com Opções"],
-    )
+        busca_nome = st.text_input("🔎 Nome", placeholder="Ex: Salad Days")
 
     col3, col4 = st.columns(2)
     with col3:
-        tipos_disp = sorted(df["tipo_estab"].dropna().unique().tolist()) if not df.empty else []
-        tipo_sel = st.multiselect("Tipo", tipos_disp)
+        # Categoria como dropdown (multiselect igual aos outros)
+        cat_opcoes = ["Todos", "🟢 Vegano", "🟡 Vegetariano", "🔵 Com Opções"]
+        cat_sel = st.multiselect("Categoria", cat_opcoes[1:], default=cat_opcoes[1:])
     with col4:
+        tipos_disp = sorted(df["tipo_estab"].dropna().unique().tolist()) if not df.empty else []
+        tipo_sel = st.multiselect("Tipo de estabelecimento", tipos_disp)
+
+    col5, col6 = st.columns(2)
+    with col5:
         culin_disp = sorted(df["culinaria"].dropna().unique().tolist()) if not df.empty else []
         culin_sel = st.multiselect("Culinária", culin_disp)
+    with col6:
+        # Bairro com autocomplete via selectbox
+        bairros_disp = ["(Todos os bairros)"] + sorted(
+            df["bairro"].dropna().unique().tolist()) if not df.empty else ["(Todos os bairros)"]
+        bairro_sel = st.selectbox("📍 Bairro ou cidade", bairros_disp,
+                                  help="Digite para filtrar")
 
-    busca_bairro = st.text_input("📍 Bairro ou cidade", placeholder="Ex: Pinheiros, Campinas")
+    aplicar = st.button("✅ Aplicar filtros", use_container_width=True)
 
-    # Filtro de distância (só aparece se tiver localização)
-    if tem_localizacao:
-        dist_max = st.slider("📏 Distância máxima", 0.5, 30.0, 30.0, 0.5, format="%.1f km")
-    else:
-        dist_max = None
-
-    ordenar_distancia = st.checkbox("📐 Ordenar por distância (mais próximo primeiro)",
-                                    value=tem_localizacao, disabled=not tem_localizacao)
-
-    aplicar = st.button("✅ Aplicar filtros")
-
-# Session state
+# Session state para persistir filtros
 if "filtros" not in st.session_state:
     st.session_state.filtros = {
         "aberto_agora": False,
-        "categorias": ["🟢 Vegano", "🟡 Vegetariano", "🔵 Com Opções"],
-        "tipo_sel": [], "culin_sel": [], "busca_bairro": "", "busca_nome": "",
-        "dist_max": None, "ordenar_distancia": False,
+        "cat_sel": ["🟢 Vegano", "🟡 Vegetariano", "🔵 Com Opções"],
+        "tipo_sel": [], "culin_sel": [],
+        "bairro_sel": "(Todos os bairros)", "busca_nome": "",
     }
 
 if aplicar:
     st.session_state.filtros = {
         "aberto_agora": aberto_agora,
-        "categorias":   categorias,
+        "cat_sel":      cat_sel if cat_sel else ["🟢 Vegano", "🟡 Vegetariano", "🔵 Com Opções"],
         "tipo_sel":     tipo_sel,
         "culin_sel":    culin_sel,
-        "busca_bairro": busca_bairro,
+        "bairro_sel":   bairro_sel,
         "busca_nome":   busca_nome,
-        "dist_max":     dist_max,
-        "ordenar_distancia": ordenar_distancia,
     }
 
 f = st.session_state.filtros
@@ -330,44 +274,33 @@ if not resultado.empty:
         "🟡 Vegetariano": "vegetariano",
         "🔵 Com Opções":  "opcoes",
     }
-    tipos_filtro = [map_cat[c] for c in f["categorias"] if c in map_cat]
+    tipos_filtro = [map_cat[c] for c in f["cat_sel"] if c in map_cat]
     resultado = resultado[resultado["tipo"].isin(tipos_filtro)] if tipos_filtro else resultado.iloc[0:0]
 
     if f["tipo_sel"]:
         resultado = resultado[resultado["tipo_estab"].isin(f["tipo_sel"])]
     if f["culin_sel"]:
         resultado = resultado[resultado["culinaria"].isin(f["culin_sel"])]
-    if f["busca_bairro"].strip():
-        resultado = resultado[resultado["bairro"].str.contains(f["busca_bairro"], case=False, na=False)]
+    if f["bairro_sel"] != "(Todos os bairros)":
+        resultado = resultado[resultado["bairro"] == f["bairro_sel"]]
     if f["busca_nome"].strip():
         resultado = resultado[resultado["nome"].str.contains(f["busca_nome"], case=False, na=False)]
     if f["aberto_agora"]:
-        resultado["_aberto"] = resultado.apply(esta_aberto, axis=1)
-        resultado = resultado[resultado["_aberto"] == True]
+        resultado["_ab"] = resultado.apply(esta_aberto, axis=1)
+        resultado = resultado[resultado["_ab"] == True]
 
-    # Calcular distâncias
-    if tem_localizacao:
+    # Calcular distância e ordenar automaticamente se tiver localização
+    if tem_loc:
         def calc_dist(row):
             try:
                 if pd.notna(row.get("lat")) and pd.notna(row.get("lng")):
                     return haversine(user_lat, user_lng, float(row["lat"]), float(row["lng"]))
-            except:
-                pass
+            except: pass
             return None
-        resultado["_distancia"] = resultado.apply(calc_dist, axis=1)
-
-        # Filtrar por distância máxima
-        if f["dist_max"]:
-            resultado = resultado[
-                resultado["_distancia"].isna() |
-                (resultado["_distancia"] <= f["dist_max"] * 1000)
-            ]
-
-        # Ordenar por distância
-        if f.get("ordenar_distancia"):
-            resultado = resultado.sort_values("_distancia", na_position="last")
+        resultado["_dist"] = resultado.apply(calc_dist, axis=1)
+        resultado = resultado.sort_values("_dist", na_position="last")
     else:
-        resultado["_distancia"] = None
+        resultado["_dist"] = None
 
 # ── Legenda ───────────────────────────────────────────────────────────
 st.markdown("""
@@ -383,8 +316,7 @@ if resultado.empty:
     st.info("Nenhum estabelecimento encontrado. Ajuste os filtros! 🌱")
 else:
     total = len(resultado)
-    s = "s" if total != 1 else ""
-    st.markdown(f'<p class="contador">Exibindo <strong>{total}</strong> estabelecimento{s}</p>',
+    st.markdown(f'<p class="contador">Exibindo <strong>{total}</strong> estabelecimento{"s" if total!=1 else ""}</p>',
                 unsafe_allow_html=True)
 
     for _, row in resultado.iterrows():
@@ -392,40 +324,37 @@ else:
         rotulo = row["rotulo"]
 
         status = esta_aberto(row)
-        if status is True:   status_html = '<span class="status-aberto">🟢 Aberto agora</span>'
-        elif status is False: status_html = '<span class="status-fechado">🔴 Fechado agora</span>'
-        else:                 status_html = ""
+        if status is True:    sh = '<span class="status-aberto">🟢 Aberto agora</span>'
+        elif status is False: sh = '<span class="status-fechado">🔴 Fechado agora</span>'
+        else:                 sh = ""
 
-        # Distância
-        dist_html = ""
-        dist_val  = row.get("_distancia")
-        if dist_val is not None and not pd.isna(dist_val):
-            dist_html = f'<span class="distancia">&nbsp;&nbsp;{formatar_distancia(dist_val)}</span>'
+        dv = row.get("_dist")
+        dh = f'<span class="distancia">&nbsp;· {fmt_dist(dv)}</span>' if dv and not pd.isna(dv) else ""
 
         hora_txt = "—"
         if pd.notna(row.get("hora_abre")) and pd.notna(row.get("hora_fecha")):
             hora_txt = f'{str(row["hora_abre"]).strip()} – {str(row["hora_fecha"]).strip()}'
         dias_txt = str(row["dias"]).strip() if pd.notna(row.get("dias")) else "—"
 
-        contato = row.get("contato", "")
-        contato_html = ""
+        contato = row.get("contato","")
+        ch = ""
         if pd.notna(contato) and str(contato).strip():
             link = str(contato).strip()
             if not link.startswith("http"): link = "https://" + link
-            contato_html = f'<p class="card-info">🔗 <a href="{link}" target="_blank">{str(contato).strip()}</a></p>'
+            ch = f'<p class="card-info">🔗 <a href="{link}" target="_blank">{str(contato).strip()}</a></p>'
 
-        obs = row.get("obs", "")
-        obs_html = f'<p class="card-info">💬 {obs}</p>' if pd.notna(obs) and str(obs).strip() else ""
+        obs = row.get("obs","")
+        oh = f'<p class="card-info">💬 {obs}</p>' if pd.notna(obs) and str(obs).strip() else ""
 
         st.markdown(f"""
         <div class="card-wrap card-{tipo}">
-          <span class="badge badge-{tipo}">{rotulo}</span>{status_html}{dist_html}
+          <span class="badge badge-{tipo}">{rotulo}</span>{sh}{dh}
           <p class="nome-estab">{row['nome']}</p>
           <p class="card-info">🍽️ {row.get('tipo_estab','—')} &nbsp;|&nbsp; 🥘 {row.get('culinaria','—')}</p>
           <p class="card-info">📍 {row.get('bairro','—')}</p>
           <p class="card-info">🏠 {row.get('endereco','—')}</p>
           <p class="card-info">⏰ {hora_txt} &nbsp;|&nbsp; 📅 {dias_txt}</p>
-          {contato_html}{obs_html}
+          {ch}{oh}
         </div>
         """, unsafe_allow_html=True)
 
