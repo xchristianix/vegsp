@@ -419,12 +419,12 @@ st.markdown("""
 
 # ── CÓDIGO DO GOOGLE ANALYTICS ──
 components.html("""
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-YGH9QS5XT0"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-KS41R8XPW2"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
 
-  gtag('config', 'G-YGH9QS5XT0');
+  gtag('config', 'G-KS41R8XPW2');
 </script>
 """, height=0, width=0)
