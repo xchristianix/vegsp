@@ -416,3 +416,15 @@ st.markdown("""
   &nbsp;|&nbsp; VegSP — Guia vegano e vegetariano de São Paulo
 </div>
 """, unsafe_allow_html=True)
+
+# ── CÓDIGO DO GOOGLE ANALYTICS ──
+components.html("""
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YGH9QS5XT0"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-YGH9QS5XT0');
+</script>
+""", height=0, width=0)
