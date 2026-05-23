@@ -184,12 +184,71 @@ st.markdown("""
 # ── Geolocalização AUTOMÁTICA ─────────────────────────────────────────
 # JS roda na carga da página, sem botão, sem filtro
 # Salva lat/lng nos query params e recarrega se ainda não tiver
-# Componente próprio de geolocalização
-# — funciona no desktop (automático) e no mobile (botão com gesto do usuário)
-_geo_comp = components.declare_component(
-    "geo_location",
-    path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "geo_component")
-)
+# Componente de geolocalização embutido no código
+# Cria a pasta do componente em tempo de execução — sem dependência de arquivos externos
+import tempfile
+_geo_dir = tempfile.mkdtemp()
+with open(os.path.join(_geo_dir, "index.html"), "w", encoding="utf-8") as _f:
+    _f.write("""<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://unpkg.com/streamlit-component-lib/dist/streamlit-component-lib.js"></script>
+<style>
+  body { margin:0; padding:4px 0; font-family:'Segoe UI',sans-serif; background:transparent; }
+  #btn {
+    background:#2E7D32; color:white; border:none;
+    border-radius:20px; padding:6px 16px;
+    font-size:0.85rem; cursor:pointer;
+    white-space:nowrap;
+  }
+  #btn:disabled { background:#81C784; cursor:default; }
+  #msg { font-size:0.78rem; color:#666; margin-left:8px; }
+</style>
+</head>
+<body>
+<button id="btn" onclick="pedir()">📍 Usar minha localização</button>
+<span id="msg"></span>
+<script>
+  Streamlit.setComponentReady();
+  // Tenta automático (desktop/Android)
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      function(p){ enviar(p); },
+      function(){ /* silencioso — botão como fallback para iOS */ },
+      { enableHighAccuracy:false, timeout:4000, maximumAge:120000 }
+    );
+  }
+  function pedir() {
+    if (!navigator.geolocation) {
+      document.getElementById('msg').textContent='❌ Não suportado neste dispositivo.';
+      return;
+    }
+    document.getElementById('btn').disabled = true;
+    document.getElementById('msg').textContent = '⏳ Buscando...';
+    navigator.geolocation.getCurrentPosition(
+      function(p){ enviar(p); },
+      function(){ document.getElementById('btn').disabled=false; document.getElementById('msg').textContent='⚠️ Permissão negada.'; },
+      { enableHighAccuracy:true, timeout:12000, maximumAge:60000 }
+    );
+  }
+  function enviar(pos) {
+    var btn = document.getElementById('btn');
+    btn.textContent = '✅ Localização obtida';
+    btn.style.background = '#388E3C';
+    btn.disabled = true;
+    document.getElementById('msg').textContent = '';
+    Streamlit.setComponentValue({
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude,
+      accuracy: Math.round(pos.coords.accuracy)
+    });
+  }
+</script>
+</body>
+</html>""")
+
+_geo_comp = components.declare_component("geo_location", path=_geo_dir)
 geo_data = _geo_comp(key="geoloc", default=None)
 
 user_lat = 0.0
